@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BB GLOW — เครดิตของฉัน</title>
+<script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Sarabun',sans-serif;background:linear-gradient(135deg,#3A0A18,#6A1A30);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px;}
+  .logo{font-size:1.4rem;font-weight:800;color:#F0D898;letter-spacing:2px;margin-bottom:4px;text-align:center;}
+  .logo-sub{font-size:0.72rem;color:rgba(240,216,152,0.7);letter-spacing:3px;margin-bottom:24px;}
+  .card{background:white;border-radius:20px;padding:24px;width:100%;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.3);}
+  .card-title{font-size:0.8rem;color:#8B1A2A;font-weight:700;letter-spacing:1px;margin-bottom:4px;}
+  .member-name{font-size:1.3rem;font-weight:800;color:#3A0A18;margin-bottom:16px;}
+  .credit-box{background:linear-gradient(135deg,#8B1A2A,#B87868);border-radius:16px;padding:20px;text-align:center;margin-bottom:16px;}
+  .credit-label{font-size:0.78rem;color:rgba(255,255,255,0.8);margin-bottom:4px;}
+  .credit-amount{font-size:2.8rem;font-weight:800;color:#F0D898;line-height:1;}
+  .credit-unit{font-size:1rem;color:rgba(240,216,152,0.8);}
+  .info-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #F5EEE8;}
+  .info-row:last-child{border-bottom:none;}
+  .info-label{font-size:0.78rem;color:#888;}
+  .info-value{font-size:0.82rem;font-weight:700;color:#3A0A18;}
+  .history-title{font-size:0.8rem;font-weight:700;color:#8B1A2A;margin:16px 0 8px;letter-spacing:0.5px;}
+  .tx-item{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid #F5EEE8;}
+  .tx-item:last-child{border-bottom:none;}
+  .tx-desc{font-size:0.75rem;color:#555;flex:1;}
+  .tx-date{font-size:0.68rem;color:#aaa;margin-top:2px;}
+  .tx-amount{font-size:0.82rem;font-weight:700;margin-left:8px;}
+  .earn{color:#2E7D32;} .use{color:#C62828;} .ref{color:#1565C0;}
+  .loading{text-align:center;color:rgba(240,216,152,0.8);padding:40px 0;font-size:0.9rem;}
+  .error-box{background:rgba(198,40,40,0.15);border:1px solid rgba(198,40,40,0.4);border-radius:12px;padding:16px;text-align:center;color:#FFCDD2;font-size:0.85rem;}
+  .not-found{text-align:center;padding:20px 0;}
+  .not-found-icon{font-size:3rem;margin-bottom:8px;}
+  .not-found-text{font-size:0.85rem;color:#666;line-height:1.6;}
+  .phone-input{width:100%;padding:10px 14px;border:1.5px solid #D4A84B;border-radius:10px;font-size:1rem;font-family:Sarabun;margin-top:8px;outline:none;}
+  .btn{width:100%;padding:12px;background:linear-gradient(135deg,#8B1A2A,#D4A84B);color:white;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;margin-top:10px;font-family:Sarabun;}
+  .badge{display:inline-block;font-size:0.65rem;padding:2px 8px;border-radius:20px;font-weight:700;margin-left:4px;}
+  .badge-expire{background:#FFF3E0;color:#E65100;}
+</style>
+</head>
+<body>
+<div class="logo">✦ BB GLOW ✦</div>
+<div class="logo-sub">ครบวงจร หัวหิน</div>
+
+<div class="card" id="main-card">
+  <div class="loading" id="loading-state">⏳ กำลังโหลดข้อมูลค่ะ...</div>
+  <div id="content-state" style="display:none;"></div>
+</div>
+
+<script>
+const LIFF_ID = '2009365473-b3H1gkuk';
+const FB_CONFIG = {
+  apiKey:"AIzaSyB8HM1grB7OsiBvdLo5xRH5SqLnQoLR25U",
+  authDomain:"bbglowhuahin-3bb7d.firebaseapp.com",
+  projectId:"bbglowhuahin-3bb7d"
+};
+
+// Init Firebase
+firebase.initializeApp(FB_CONFIG);
+const db = firebase.firestore();
+
+let lineProfile = null;
+let memberData = null;
+
+async function init(){
+  try{
+    await liff.init({liffId: LIFF_ID});
+    if(!liff.isLoggedIn()){ liff.login(); return; }
+    lineProfile = await liff.getProfile();
+    // ค้นหาสมาชิกจาก LINE displayName หรือให้กรอกเบอร์
+    showPhoneInput();
+  } catch(e){
+    showError('เกิดข้อผิดพลาด: '+e.message);
+  }
+}
+
+function showPhoneInput(){
+  const content = document.getElementById('content-state');
+  document.getElementById('loading-state').style.display='none';
+  content.style.display='';
+  content.innerHTML=`
+    <div class="card-title">สวัสดีค่ะ 👋</div>
+    <div class="member-name">${lineProfile?.displayName||'คุณลูกค้า'}</div>
+    <div style="font-size:0.82rem;color:#555;margin-bottom:8px;">กรุณากรอกเบอร์โทรที่ลงทะเบียนไว้ค่ะ</div>
+    <input class="phone-input" type="tel" id="phone-input" placeholder="เบอร์โทรศัพท์" maxlength="10">
+    <button class="btn" onclick="searchByPhone()">🔍 ตรวจสอบเครดิต</button>
+    <div id="search-error" style="color:#C62828;font-size:0.78rem;margin-top:8px;text-align:center;"></div>
+  `;
+  setTimeout(()=>document.getElementById('phone-input')?.focus(),300);
+}
+
+async function searchByPhone(){
+  const phone = document.getElementById('phone-input').value.trim();
+  if(phone.length<9){ document.getElementById('search-error').textContent='⚠️ กรุณากรอกเบอร์ให้ครบค่ะ'; return; }
+  document.getElementById('search-error').textContent='';
+  document.getElementById('loading-state').style.display='';
+  document.getElementById('content-state').style.display='none';
+  try{
+    const snap = await db.collection('members').where('phone','==',phone).get();
+    if(snap.empty){ showNotFound(); return; }
+    memberData = {id: snap.docs[0].id, ...snap.docs[0].data()};
+    const txSnap = await db.collection('transactions').where('memberId','==',memberData.id).get();
+    const txs = txSnap.docs.map(d=>d.data()).filter(t=>!t.voided);
+    showMemberInfo(txs);
+  } catch(e){ showError('เกิดข้อผิดพลาด: '+e.message); }
+}
+
+function getValidCredit(txs){
+  const now = new Date();
+  return txs.filter(t=>t.balance>0&&new Date(t.expiry)>now).reduce((s,t)=>s+t.balance,0);
+}
+
+function fmtDate(d){ return d?new Date(d).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}):''; }
+
+function showMemberInfo(txs){
+  const credit = Math.round(getValidCredit(txs));
+  const joinDate = fmtDate(memberData.joinDate);
+  const sorted = [...txs].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10);
+  const now = new Date();
+  // หา expiry ที่ใกล้ที่สุด
+  const activeTx = txs.filter(t=>t.balance>0&&new Date(t.expiry)>now).sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
+  const nearExpiry = activeTx[0];
+
+  const content = document.getElementById('content-state');
+  document.getElementById('loading-state').style.display='none';
+  content.style.display='';
+  content.innerHTML=`
+    <div class="card-title">✦ สมาชิก BB GLOW</div>
+    <div class="member-name">${memberData.name}</div>
+    <div class="credit-box">
+      <div class="credit-label">เครดิตคงเหลือ</div>
+      <div class="credit-amount">${credit.toLocaleString()} <span class="credit-unit">฿</span></div>
+      ${nearExpiry?`<div style="font-size:0.7rem;color:rgba(255,255,255,0.7);margin-top:6px;">⏰ หมดอายุ ${fmtDate(nearExpiry.expiry)}</div>`:''}
+    </div>
+    <div class="info-row">
+      <span class="info-label">📞 เบอร์โทร</span>
+      <span class="info-value">${memberData.phone}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">📅 วันที่สมัคร</span>
+      <span class="info-value">${joinDate}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">💜 ใช้เครดิตได้สูงสุด</span>
+      <span class="info-value">${Math.floor(credit*0.5).toLocaleString()} ฿ / ครั้ง</span>
+    </div>
+    <div class="history-title">📋 ประวัติเครดิตล่าสุด</div>
+    ${sorted.map(t=>{
+      const sign = t.type==='use'?'-':'+';
+      const cls = t.type==='use'?'use':t.type==='ref'?'ref':'earn';
+      const typeLabel = t.type==='earn'?'💛รับเครดิต':t.type==='use'?'💜ใช้เครดิต':'💙แนะนำเพื่อน';
+      return `<div class="tx-item">
+        <div class="tx-desc">
+          <div>${typeLabel} · ${t.desc||''}</div>
+          <div class="tx-date">${fmtDate(t.date)}${t.type==='earn'?' · หมด '+fmtDate(t.expiry):''}</div>
+        </div>
+        <div class="tx-amount ${cls}">${sign}${Math.abs(t.amount).toLocaleString()} ฿</div>
+      </div>`;
+    }).join('')||'<div style="text-align:center;color:#aaa;padding:12px;font-size:0.8rem;">ยังไม่มีประวัติค่ะ</div>'}
+    <div style="margin-top:16px;text-align:center;">
+      <button class="btn" style="background:rgba(139,26,42,0.1);color:#8B1A2A;border:1.5px solid #8B1A2A;" onclick="showPhoneInput()">🔄 ค้นหาใหม่</button>
+    </div>
+  `;
+}
+
+function showNotFound(){
+  const content = document.getElementById('content-state');
+  document.getElementById('loading-state').style.display='none';
+  content.style.display='';
+  content.innerHTML=`
+    <div class="not-found">
+      <div class="not-found-icon">🔍</div>
+      <div style="font-weight:700;color:#3A0A18;margin-bottom:8px;">ไม่พบข้อมูลสมาชิกค่ะ</div>
+      <div class="not-found-text">ยังไม่ได้เป็นสมาชิกหรือเบอร์อาจไม่ตรงค่ะ<br>ติดต่อร้านเพื่อสมัครสมาชิกได้เลยนะคะ 😊</div>
+      <button class="btn" style="margin-top:16px;" onclick="showPhoneInput()">🔄 ลองใหม่</button>
+    </div>
+  `;
+}
+
+function showError(msg){
+  const content = document.getElementById('content-state');
+  document.getElementById('loading-state').style.display='none';
+  content.style.display='';
+  content.innerHTML=`<div class="error-box">❌ ${msg}</div>`;
+}
+
+init();
+</script>
+</body>
+</html>
